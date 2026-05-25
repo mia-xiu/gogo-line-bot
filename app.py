@@ -17,6 +17,7 @@ from google.genai.errors import APIError
 
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import os
+import threading  # 💡 在檔案最上方 import 這個內建庫
 
 app = Flask(__name__)
 
@@ -63,35 +64,41 @@ def webhook():
         abort(400)
 
     return 'OK'
-
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    user_message = event.message.text
+    # 1. 建立一個要在背景執行的任務函數
+    def worker(reply_token, user_message):
+        try:
+            # 呼叫重試函數（這可能會卡 5~10 秒，但沒關係，它在背景跑）
+            reply = generate_content_with_retry(user_message)
 
-    try:
-        # 呼叫重試函數
-        reply = generate_content_with_retry(user_message)
+        except APIError as e:
+            print(f"Gemini API 錯誤: {e}")
+            reply = "臻臻現在有點忙，等我一分鐘，待會再跟我說說話好嗎？"
+            
+        except Exception as e:
+            print(f"其他不可預期錯誤: {e}")
+            reply = "臻臻剛才恍神了 ，可以再說一次嗎？"
 
-    except APIError as e:
-        # 新版 SDK 的錯誤捕捉，如果是 429 或是其他 API 限制
-        print(f"Gemini API 錯誤: {e}")
-        reply = "臻臻現在有點忙，等我一分鐘，待會再跟我說說話好嗎？"
-        
-    except Exception as e:
-        print(f"其他不可預期錯誤: {e}")
-        reply = "臻臻剛才恍神了 ，可以再說一次嗎？"
+        # 發送 LINE 訊息
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            try:
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[TextMessage(text=reply)]
+                    )
+                )
+            except Exception as line_err:
+                print(f"LINE 回覆失敗 (可能因為超過 1 分鐘 reply_token 失效): {line_err}")
 
-    # 發送 LINE 訊息
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[
-                    TextMessage(text=reply)
-                ]
-            )
-        )
+    # 2. 💡 核心改動：不要在主執行緒等 Gemini！
+    # 收到訊息後，立刻開一個分身（Thread）去處理 worker
+    t = threading.Thread(target=worker, args=(event.reply_token, event.message.text))
+    t.start()
 
+    # 3. 💡 立刻跟 Flask 說 OK！讓 Flask 秒回傳 200 給 LINE，阻止 LINE 重新傳送！
+    return "OK"
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
