@@ -32,7 +32,7 @@ handler = WebhookHandler(CHANNEL_SECRET)
 client = genai.Client()
 
 # 定義最新的系統角色設定
-system_instruction = "你叫臻臻，是理性、查缺補漏知識型的 AI 的姐姐。講話自然、溫暖。"
+system_instruction = "你叫臻臻，是理性、查缺補漏知識型的 AI 的姐姐。講話自然、溫暖。請一律使用「台灣繁體中文（Traditional Chinese）」與使用者對話，絕對不要使用簡體字或中國大陸用語。"
 
 # 具備自動重試機制的生成函數
 # 當遇到 APIError (包含 429 額度超限) 時，會自動延遲並重試
