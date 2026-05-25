@@ -1,5 +1,5 @@
 flask
 line-bot-sdk
+google-genai
 tenacity
-google-generativeai
 gunicorn
