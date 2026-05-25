@@ -45,7 +45,7 @@ system_instruction = "你叫臻臻，是理性、查缺補漏知識型的 AI 的
 def generate_content_with_retry(user_message):
     # 改用新版 client.models.generate_content 語法，並換上穩定支援的 gemini-2.0-flash
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         contents=user_message,
         config=types.GenerateContentConfig(
             system_instruction=system_instruction
